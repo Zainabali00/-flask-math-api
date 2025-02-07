@@ -1,20 +1,35 @@
-# Use an official Python runtime as a parent image
-FROM python:3.12
+# Use a lightweight Python image as base
+FROM python:3.9-slim AS builder
 
-# Set the working directory in the container
+# Set working directory
 WORKDIR /app
 
-# Copy the current directory contents into the container at /app
-COPY . /app
+# Copy only requirements first for caching
+COPY requirements.txt .
 
-# Install any needed packages specified in requirements.txt
+# Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Make port 5000 available to the world outside this container
+# Use a second stage to reduce image size
+FROM python:3.9-slim
+
+# Set a non-root user for security
+RUN useradd -m appuser
+WORKDIR /app
+
+# Ensure the app directory is owned by appuser
+RUN chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
+
+# Copy installed dependencies and application files
+COPY --from=builder /usr/local/lib/python3.9/site-packages /usr/local/lib/python3.9/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+COPY . .
+
+# Expose Flask application port
 EXPOSE 5000
 
-# Define environment variable
-ENV FLASK_APP=app.py
-
-# Run app.py when the container launches
-CMD ["flask", "run", "--host=0.0.0.0"]
+# Run Flask app
+CMD ["python", "app.py"]
